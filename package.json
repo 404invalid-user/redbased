@@ -1,0 +1,30 @@
+{
+  "name": "redbased",
+  "version": "0.1.0",
+  "description": "use reddis like a database with prefifined schemas",
+  "main": "/dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/404invalid-user/redbased.git"
+  },
+  "author": "404invaid-user",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/404invalid-user/redbased/issues"
+  },
+  "homepage": "https://github.com/404invalid-user/redbased#readme",
+  "devDependencies": {
+    "@types/ioredis": "^5.0.0",
+    "@types/node": "^20.11.19",
+    "babel-eslint": "^10.1.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^7.0.1"
+  },
+  "dependencies": {
+    "ioredis": "^5.3.2"
+  }
+}

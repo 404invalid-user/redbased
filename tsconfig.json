@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["es2017"],
+    "module": "commonjs",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "resolveJsonModule": true,
+  },
+
+  "esModuleInterop": true,
+  "allowSyntheticDefaultImports": true,
+
+  "include": ["src/**/*.ts", "types/schema.d.ts"],
+  "exclude": ["node_modules"]
+}
