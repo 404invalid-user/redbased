@@ -18,6 +18,8 @@ class SchemaInstance {
     //TODO: mass document schema format update
     //TODO: prevent multible schemas with same name created
 
+    if (this == undefined) throw new Error("Ensure you define a SchemaInstance with new, 'const x = new Schema() not const x = Schema'");
+
     this.name = name;
 
     // add 'id' field
