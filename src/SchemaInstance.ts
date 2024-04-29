@@ -224,9 +224,14 @@ class SchemaInstance {
   }
 
   public async size(filterObject: Document | null): Promise<number> {
-    return new Promise(async (res, rej) => {
-      let size = 0;
-      const sizeStream = await this.find(filterObject, 300, true);
+    if (redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
+    let size: number = 0;
+    if (filterObject === null || filterObject === undefined || Object.keys(filterObject).length === 0) {
+      size = await redisClient.hlen(pluralize(this.name));
+      return size;
+    }
+    const sizeStream = await this.find(filterObject, 300, true);
+    return new Promise((res, rej) => {
       sizeStream.on('data', docs => size += docs.lenght);
       sizeStream.on('end', () => {
         res(size);
