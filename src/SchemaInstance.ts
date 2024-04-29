@@ -144,7 +144,7 @@ class SchemaInstance {
 
     /** check if a document fits the filter */
     function checkInFilter(doc: Document): boolean {
-      if (filterObject === null || Object.keys(filterObject).length === 0) {
+      if (filterObject === null || filterObject === undefined || Object.keys(filterObject).length === 0) {
         return true;
       }
 
