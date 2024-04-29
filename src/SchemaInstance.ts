@@ -89,7 +89,12 @@ class SchemaInstance {
     const documentData = await constructDocument(this.name, data, this.fields);
     const validateDoc = documentValidation(data, this.fields, false);
 
-    if (validateDoc.pass === false) throw new Error(validateDoc.msg);
+
+    if (validateDoc.pass === false) {
+      const err = new Error(`Failed to create ${this.name} ${validateDoc.msg}`);
+      Error.captureStackTrace(err, this.create);
+      throw err;
+    }
 
     //TODO: get default value from schema and fillin if null
     // Convert the filtered data object to a string
@@ -106,7 +111,11 @@ class SchemaInstance {
 
 
   public async findById(id: string | number): Promise<DocumentInstance | null> {
-    if (!id || id == null || id == undefined) throw new Error("an id must be provided");
+    if (!id || id == null || id == undefined) {
+      const err = new Error("an id must be provided");
+      Error.captureStackTrace(err, this.findById);
+      throw err;
+    }
     if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
     const value: string | null = await redisClient.hget(pluralize(this.name), id.toString());
     if (value === undefined || value === null) return null;
@@ -124,7 +133,7 @@ class SchemaInstance {
   public async find(filterObject: Document | null, limit: number = 200, raw: boolean = false): Promise<Readable> {
 
     const validateDoc = documentValidation(filterObject, this.fields, true);
-    if (validateDoc.pass = false) throw new Error(validateDoc.msg);
+    if (validateDoc.pass = false) throw new Error(`failed to find ${this.name} ${validateDoc.msg}`);
 
     if (redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
 
