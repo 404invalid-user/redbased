@@ -17,8 +17,9 @@ class SchemaInstance {
     //TODO: use own custom schema to save these instead
     //TODO: mass document schema format update
     //TODO: prevent multible schemas with same name created
+    //TODO: fix error stack trace not working only traces back to this function not what called this function
 
-    if (this == undefined) throw new Error("Ensure you define a SchemaInstance with new, 'const x = new Schema() not const x = Schema'");
+    if (this == undefined) throw new Error(`Could not cunstruct ${name} Schema Ensure you define a SchemaInstance with new, 'const x = new Schema() not const x = Schema'`);
 
     this.name = name;
 
@@ -35,13 +36,13 @@ class SchemaInstance {
     const fieldKeys = Object.keys(fields);
     const uniqueKeys = new Set(fieldKeys);
     if (fieldKeys.length !== uniqueKeys.size) {
-      throw new Error('Duplicate keys are not allowed in the fields definition.');
+      throw new Error(`Could not cunstruct ${this.name} Schema Duplicate keys are not allowed in the fields definition.`);
     }
 
     // Check for keys starting with '__'
     const invalidKeys = fieldKeys.filter(key => key.startsWith('__'));
     if (invalidKeys.length > 0) {
-      throw new Error('Keys starting with "__" are reserved for internal use and not allowed.');
+      throw new Error(`Could not cunstruct ${this.name} Schema Keys starting with "__" are reserved for internal use and not allowed.`);
     }
 
     // Filter out unnecessary properties
@@ -60,7 +61,7 @@ class SchemaInstance {
 
       // Validate required
       if (required !== undefined && typeof required !== 'boolean') {
-        throw new Error(`'required' must be a boolean for field '${field}' in schema '${this.name}'.`);
+        throw new Error(`Could not cunstruct ${this.name} Schema 'required' must be a boolean for field '${field}' in schema '${this.name}'.`);
       }
 
       // Default 'required' to false if not provided
@@ -70,12 +71,12 @@ class SchemaInstance {
       // Validate type
       const allowedTypes = ['String', 'Number', 'Boolean', 'Object'];
       if (!type || !allowedTypes.includes(type.name)) {
-        throw new Error(`Invalid 'type' for field '${field}'.`);
+        throw new Error(`Could not cunstruct ${this.name} Schema Invalid 'type' for field '${field}'.`);
       }
 
       // Validate defaultValue
       if (defaultValue !== undefined && typeof defaultValue !== type.name.toLowerCase()) {
-        throw new Error(`'defaultValue' must match the specified 'type' for field '${field}' in '${this.name}' schema.`);
+        throw new Error(`Could not cunstruct ${this.name} Schema  'defaultValue' must match the specified 'type' for field '${field}' in '${this.name}' schema.`);
       }
     }
   }
@@ -92,7 +93,7 @@ class SchemaInstance {
 
     if (validateDoc.pass === false) {
       const err = new Error(`Failed to create ${this.name} ${validateDoc.msg}`);
-      Error.captureStackTrace(err, this.create);
+      Error.captureStackTrace(err);
       throw err;
     }
 
@@ -131,7 +132,6 @@ class SchemaInstance {
    * @returns {Stream}
    */
   public async find(filterObject: Document | null, limit: number = 200, raw: boolean = false): Promise<Readable> {
-
     const validateDoc = documentValidation(filterObject, this.fields, true);
     if (validateDoc.pass = false) throw new Error(`failed to find ${this.name} ${validateDoc.msg}`);
 
@@ -241,7 +241,11 @@ class SchemaInstance {
     }
     const sizeStream = await this.find(filterObject, 300, true);
     return new Promise((res, rej) => {
-      sizeStream.on('data', docs => size += docs.lenght);
+      sizeStream.on('data', docs => {
+        console.log("socd longe",docs.length );
+        size += docs.length;
+        console.log("size",size );
+      });
       sizeStream.on('end', () => {
         res(size);
       });

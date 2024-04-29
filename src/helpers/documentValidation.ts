@@ -1,5 +1,13 @@
 import { Document, Fields } from "../../types/schema";
 
+function capitalizeFirstLetter(string: string): string {
+  return string[0].toUpperCase() + string.slice(1);
+}
+
+function getTypeAsString(value): string {
+  return value.name || 'undefined';
+}
+
 function documentValidation(doc: Document | null = null, validationFeilds: Fields, isFilter: boolean = false) {
 
   if ((doc == null || doc.length === 0) && isFilter == true) return {
@@ -44,12 +52,14 @@ function documentValidation(doc: Document | null = null, validationFeilds: Field
 
 
     //valid data type
-    //@ts-expect-error - no clue why it gives an error it works
-    if (typeof doc[field] !== type) {
-      return {
-        pass: false,
-        msg: `Field '${field}' must be of type '${type == String ? "String" : type === Number ? "Number" : type === Boolean ? "Boolean" : type === Object ? "Object" : type}'.`
-
+    const typeStr: string = getTypeAsString(type);
+    const typeOfSupplyData: string = capitalizeFirstLetter(typeof doc[field]);
+    if (typeOfSupplyData !== typeStr) {
+      if (required === false && typeOfSupplyData !== "Undefined") {
+        return {
+          pass: false,
+          msg: `Field '${field}' must be of type '${typeStr}' ${required === false ? "or 'undefined'": ''}.`
+        }
       }
     }
   }

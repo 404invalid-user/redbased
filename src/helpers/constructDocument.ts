@@ -1,8 +1,7 @@
 import { Document, Fields } from "../../types/schema";
 import { redisClient } from "../redisClient";
 import pluralize from "./pluralize";
-//@ts-expect-error - it do be working anyway
-import crypto from "crypto";
+import * as crypto from "crypto";
 
 
 export default async function constructDocument(schemaName: string, doc: Document, fields: Fields, useCountForDefaultId: boolean = false) {
@@ -23,7 +22,7 @@ export default async function constructDocument(schemaName: string, doc: Documen
     const { required, defaultValue } = fields[field];
     if (required) {
       if (doc[field] === null || doc[field] === undefined) {
-        if (defaultValue) {
+        if (defaultValue !== undefined) {
           doc[field] = defaultValue;
         }
       }
