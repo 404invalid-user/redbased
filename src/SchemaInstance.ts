@@ -242,9 +242,7 @@ class SchemaInstance {
     const sizeStream = await this.find(filterObject, 300, true);
     return new Promise((res, rej) => {
       sizeStream.on('data', docs => {
-        console.log("socd longe",docs.length );
         size += docs.length;
-        console.log("size",size );
       });
       sizeStream.on('end', () => {
         res(size);
