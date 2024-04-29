@@ -223,6 +223,19 @@ class SchemaInstance {
     return readableStream;
   }
 
+  public async size(filterObject: Document | null): Promise<number> {
+    return new Promise(async (res, rej) => {
+      let size = 0;
+      const sizeStream = await this.find(filterObject, 300, true);
+      sizeStream.on('data', docs => size += docs.lenght);
+      sizeStream.on('end', () => {
+        res(size);
+      });
+      sizeStream.on('error', (error) => {
+        rej(error);
+      });
+    });
+  }
 
   public async delete(id: string): Promise<boolean> {
     if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
