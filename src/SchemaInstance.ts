@@ -180,7 +180,8 @@ class SchemaInstance {
     }
     /** push and reset local array */
     function pushAndResetArray() {
-      if (foundDocumentsArr.length <= 0) return false;
+      //NOTE - push an empy array before stream close incase there was no items
+      //if (foundDocumentsArr.length <= 0) return false;
       readableStream.push(foundDocumentsArr);
       foundDocumentsArr = [];
       return true;
@@ -231,6 +232,20 @@ class SchemaInstance {
 
     return readableStream;
   }
+
+  public async findOne(filterObject: Document | null, raw: boolean = false): Promise<Document|null> {
+  const findStream = await this.find(filterObject, 300, raw);
+  return new Promise((res, rej) => {
+    findStream.on('data', (results) => {
+      if (results.length <= 0) return res(null);
+      return res(results[0]);
+    });
+    findStream.on('close', () =>{
+      return res(null);
+    })
+    findStream.on('error', (err) => rej(err));
+  })
+}
 
   public async size(filterObject: Document | null): Promise<number> {
     if (redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");

@@ -1,7 +1,8 @@
 export interface Field {
   required?: boolean;
   type: StringConstructor | NumberConstructor | BooleanConstructor | ObjectConstructor;
-  defaultValue?: never;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  defaultValue?: any|undefined;
 }
 
 export interface Fields {

@@ -76,7 +76,4 @@ export default class DocumentInstance {
     return json as Document;
   }
 
-  toString(): string {
-    return `${this._data.schema} {${Object.entries(this).map(([key, value]) => typeof value === 'function' ? `${key}: function ${value.name}()` : key == '__data' ? '' : `${key}: ${value}`).join(', ')}}`;
-  }
 }
