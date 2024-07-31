@@ -1,19 +1,19 @@
+import { Redis } from "ioredis";
 import { Document, Fields } from "../../types/schema";
-import { redisClient } from "../redisClient";
 import pluralize from "./pluralize";
 import * as crypto from "crypto";
 
 
-export default async function constructDocument(schemaName: string, doc: Document, fields: Fields, useCountForDefaultId: boolean = false) {
+export default async function constructDocument(redisClient: Redis | null, schemaName: string, doc: Document, fields: Fields, useCountForDefaultId: boolean = false) {
   if (redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
-
+  const resdoc = JSON.parse(JSON.stringify(doc));
   //if id null auto assign id
-  if (doc.id == null || doc.id === undefined) {
+  if (resdoc.id == null || resdoc.id === undefined) {
     if (useCountForDefaultId === true) {
       const SchemaDocumentCount: number = await redisClient.hlen(pluralize(schemaName));
-      doc.id = (SchemaDocumentCount + 1).toString();
+      resdoc.id = (SchemaDocumentCount + 1).toString();
     } else {
-      doc.id = crypto.randomUUID().toString();
+      resdoc.id = crypto.randomUUID().toString();
     }
   }
 
@@ -21,12 +21,12 @@ export default async function constructDocument(schemaName: string, doc: Documen
   for (const field in fields) {
     const { required, defaultValue } = fields[field];
     if (required) {
-      if (doc[field] === null || doc[field] === undefined) {
+      if (resdoc[field] === null || resdoc[field] === undefined) {
         if (defaultValue !== undefined) {
-          doc[field] = defaultValue;
+          resdoc[field] = defaultValue;
         }
       }
     }
   }
-  return doc;
+  return resdoc;
 }
