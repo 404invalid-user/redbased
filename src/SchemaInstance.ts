@@ -1,84 +1,23 @@
 import { Readable } from 'stream';
-import { redisClient } from './redisClient';
 import { Fields, Document } from '../types/schema';
 import DocumentInstance from './DocumentInstance';
 import pluralize from './helpers/pluralize';
 import documentValidation from './helpers/documentValidation';
 import constructDocument from './helpers/constructDocument';
+import { Redis } from 'ioredis';
 
 
 
-class SchemaInstance {
+export class SchemaInstance {
   public name: string;
   private fields: Fields;
+  private redisClient: Redis | null = null;
 
-  constructor(name: string, fields: Fields) {
-    //TODO: create document under schmea name with id SCHEMA to verify schema is correct and not changed - prevent functions and things returning this document - warn user in docs this is created and their other lang apps should ignore it too (-1 from length, dont include in stream etc)
-    //TODO: use own custom schema to save these instead
-    //TODO: mass document schema format update
-    //TODO: prevent multible schemas with same name created
-    //TODO: fix error stack trace not working only traces back to this function not what called this function
-
-    if (this == undefined) throw new Error(`Could not cunstruct ${name} Schema Ensure you define a SchemaInstance with new, 'const x = new Schema() not const x = Schema'`);
-
+  constructor(redisClient: Redis|null, name: string, fields: Fields) {
+    if (redisClient === null) throw new Error("can not add schema " + name + " as there is no redis connection");
+    this.redisClient = redisClient;
     this.name = name;
-
-    // add 'id' field
-    this.fields = {
-      id: {
-        required: true,
-        type: String,
-      },
-      ...fields,
-    };
-
-    // Check for duplicate keys
-    const fieldKeys = Object.keys(fields);
-    const uniqueKeys = new Set(fieldKeys);
-    if (fieldKeys.length !== uniqueKeys.size) {
-      throw new Error(`Could not cunstruct ${this.name} Schema Duplicate keys are not allowed in the fields definition.`);
-    }
-
-    // Check for keys starting with '__'
-    const invalidKeys = fieldKeys.filter(key => key.startsWith('__'));
-    if (invalidKeys.length > 0) {
-      throw new Error(`Could not cunstruct ${this.name} Schema Keys starting with "__" are reserved for internal use and not allowed.`);
-    }
-
-    // Filter out unnecessary properties
-    for (const field in this.fields) {
-      const { required, type, defaultValue } = this.fields[field];
-      this.fields[field] = {
-        required: required === true ? true : false,
-        type: type || String,
-        defaultValue,
-      };
-    }
-
-    // Validate fields
-    for (const field in this.fields) {
-      const { type, required, defaultValue } = this.fields[field];
-
-      // Validate required
-      if (required !== undefined && typeof required !== 'boolean') {
-        throw new Error(`Could not cunstruct ${this.name} Schema 'required' must be a boolean for field '${field}' in schema '${this.name}'.`);
-      }
-
-      // Default 'required' to false if not provided
-      this.fields[field].required = required !== undefined ? required : false;
-
-      //TODO: expand supported types of data
-      // Validate type
-      const allowedTypes = ['String', 'Number', 'Boolean', 'Object'];
-      if (!type || !allowedTypes.includes(type.name)) {
-        throw new Error(`Could not cunstruct ${this.name} Schema Invalid 'type' for field '${field}'.`);
-      }
-
-      // Validate defaultValue
-      if (defaultValue !== undefined && typeof defaultValue !== type.name.toLowerCase()) {
-        throw new Error(`Could not cunstruct ${this.name} Schema  'defaultValue' must match the specified 'type' for field '${field}' in '${this.name}' schema.`);
-      }
-    }
+    this.fields = fields;
   }
 
 
@@ -86,28 +25,25 @@ class SchemaInstance {
   // SECTION - public functions
 
   public async create(data: Document): Promise<Document> {
-    if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
-    const documentData = await constructDocument(this.name, data, this.fields);
+    if (this.redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
+    const documentData = await constructDocument(this.redisClient, this.name, data, this.fields);
     const validateDoc = documentValidation(data, this.fields, false);
-
-
     if (validateDoc.pass === false) {
       const err = new Error(`Failed to create ${this.name} ${validateDoc.msg}`);
       Error.captureStackTrace(err);
       throw err;
     }
 
-    //TODO: get default value from schema and fillin if null
     // Convert the filtered data object to a string
     const docString = JSON.stringify(documentData);
 
     //check for dupe id
-    const idExistCheck: string | null = await redisClient.hget(pluralize(this.name), documentData.id);
+    const idExistCheck: string | null = await this.redisClient.hget(pluralize(this.name), documentData.id);
     if (idExistCheck !== null) throw new Error("a document with that id exists");
 
     // Save the data to Redis
-    await redisClient.hset(pluralize(this.name), documentData.id, docString);
-    return data;
+    await this.redisClient.hset(pluralize(this.name), documentData.id, docString);
+    return new DocumentInstance(this.redisClient, this.name, documentData, this.fields);
   }
 
 
@@ -117,11 +53,11 @@ class SchemaInstance {
       Error.captureStackTrace(err, this.findById);
       throw err;
     }
-    if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
-    const value: string | null = await redisClient.hget(pluralize(this.name), id.toString());
+    if (this.redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
+    const value: string | null = await this.redisClient.hget(pluralize(this.name), id.toString());
     if (value === undefined || value === null) return null;
     const dataObject = JSON.parse(value);
-    return new DocumentInstance(this.name, dataObject, this.fields);
+    return new DocumentInstance(this.redisClient, this.name, dataObject, this.fields);
   }
 
   /**
@@ -135,11 +71,11 @@ class SchemaInstance {
     const validateDoc = documentValidation(filterObject, this.fields, true);
     if (validateDoc.pass = false) throw new Error(`failed to find ${this.name} ${validateDoc.msg}`);
 
-    if (redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
+    if (this.redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
 
 
 
-    const SchemaDocumentCount: number = await redisClient.hlen(pluralize(this.name));
+    const SchemaDocumentCount: number = await this.redisClient.hlen(pluralize(this.name));
     let foundDocumentsArr: DocumentInstance[] = [];
     let processedDocuments: number = 0;
 
@@ -187,11 +123,9 @@ class SchemaInstance {
       return true;
     }
 
-    const schemaName = this.name;
-    const fields = this.fields;
 
     /** handle the redis stream */
-    function handleRedisStreamData(results: string[]) {
+    const handleRedisStreamData = (results: string[]) => {
       //return empyty arr and end stream if lenght 0
       if (results.length <= 0) {
         readableStream.push([]);
@@ -204,7 +138,7 @@ class SchemaInstance {
         //check if doc in filter and add to our temp aray
         if (checkInFilter(doc) === true) {
           if (raw == true) foundDocumentsArr.push(doc);
-          if (raw == false) foundDocumentsArr.push(new DocumentInstance(schemaName, doc, fields));
+          if (raw == false) foundDocumentsArr.push(new DocumentInstance(this.redisClient, this.name, doc, this.fields));
         }
 
         //check if we should emit the local array to stream
@@ -223,7 +157,7 @@ class SchemaInstance {
       }
     }
     //redis stream
-    const schemaStream = redisClient.hscanStream(pluralize(this.name), { count: limit });
+    const schemaStream = this.redisClient.hscanStream(pluralize(this.name), { count: limit });
     schemaStream.on('data', handleRedisStreamData);
     schemaStream.on('error', (err) => {
       // If an error occurs, emit the error on the readable stream
@@ -233,25 +167,25 @@ class SchemaInstance {
     return readableStream;
   }
 
-  public async findOne(filterObject: Document | null, raw: boolean = false): Promise<Document|null> {
-  const findStream = await this.find(filterObject, 300, raw);
-  return new Promise((res, rej) => {
-    findStream.on('data', (results) => {
-      if (results.length <= 0) return res(null);
-      return res(results[0]);
-    });
-    findStream.on('close', () =>{
-      return res(null);
+  public async findOne(filterObject: Document | null, raw: boolean = false): Promise<Document | null> {
+    const findStream = await this.find(filterObject, 300, raw);
+    return new Promise((res, rej) => {
+      findStream.on('data', (results) => {
+        if (results.length <= 0) return res(null);
+        return res(results[0]);
+      });
+      findStream.on('close', () => {
+        return res(null);
+      })
+      findStream.on('error', (err) => rej(err));
     })
-    findStream.on('error', (err) => rej(err));
-  })
-}
+  }
 
   public async size(filterObject: Document | null): Promise<number> {
-    if (redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
+    if (this.redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
     let size: number = 0;
     if (filterObject === null || filterObject === undefined || Object.keys(filterObject).length === 0) {
-      size = await redisClient.hlen(pluralize(this.name));
+      size = await this.redisClient.hlen(pluralize(this.name));
       return size;
     }
     const sizeStream = await this.find(filterObject, 300, true);
@@ -269,11 +203,9 @@ class SchemaInstance {
   }
 
   public async delete(id: string): Promise<boolean> {
-    if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
+    if (this.redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
     if (!id || id == null || id == undefined) throw new Error("id must be defined to delete");
-    await redisClient.hdel(pluralize(this.name), id);
+    await this.redisClient.hdel(pluralize(this.name), id);
     return true;
   }
 }
-
-export const Schema = SchemaInstance;

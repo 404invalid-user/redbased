@@ -1,12 +1,13 @@
 import { Fields, Document } from '../types/schema';
-import { redisClient } from './redisClient';
 import pluralize from './helpers/pluralize';
 import documentValidation from './helpers/documentValidation';
+import { Redis } from 'ioredis';
 
 type MappedData = {
   id: string
   fields: Fields
   schema: string
+  redisClient:Redis|null
 };
 
 export default class DocumentInstance {
@@ -15,14 +16,15 @@ export default class DocumentInstance {
   [key: string]: any; // Use type from Field
   private __data!: MappedData;
 
-  constructor(schemaName: string, data: Document, fields: Fields) {
+  constructor(redisClient:Redis|null, schemaName: string, data: Document, fields: Fields) {
 
     //"hides" backend object so user doesn't accidentally come across it in for loops etc 
     Object.defineProperty(this, '__data', {
       value: {
         id: data.id,
         schema: schemaName,
-        fields: fields
+        fields: fields,
+        redisClient: redisClient
       },
       enumerable: false
     });
@@ -34,9 +36,9 @@ export default class DocumentInstance {
     }
   }
   async delete(): Promise<boolean> {
-    if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
+    if (this.__data.redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
     const schema: string = this.__data.schema;
-    const deleteResult = await redisClient.hdel(pluralize(schema), this.__data.id);
+    const deleteResult = await this.__data.redisClient.hdel(pluralize(schema), this.__data.id);
     if (deleteResult == 0) {
       throw new Error("could not delete doc with id '" + this.__data.id + "' as it does not exist anymore.");
     }
@@ -45,7 +47,7 @@ export default class DocumentInstance {
   }
 
   async save(): Promise<boolean> {
-    if (redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
+    if (this.__data.redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
     const schema: string = this.__data.schema;
 
     const validateDoc = documentValidation(this.toJSON(), this.__data.fields, false);
@@ -53,7 +55,7 @@ export default class DocumentInstance {
       throw new Error(validateDoc.msg);
     }
     const docString = JSON.stringify(this.toJSON());
-    const deleteResult = await redisClient.hdel(pluralize(schema), this.__data.id);
+    const deleteResult = await this.__data.redisClient.hdel(pluralize(schema), this.__data.id);
     if (deleteResult == 0) {
       throw new Error("could not update doc with id '" + this.__data.id + "' as it does not exist on the database anymore.");
     }
@@ -61,7 +63,7 @@ export default class DocumentInstance {
     if (this.__data.id !== this.id) {
       this.__data.id = this.id;
     }
-    await redisClient.hset(pluralize(schema), this.id, docString);
+    await this.__data.redisClient.hset(pluralize(schema), this.id, docString);
     return true;
   }
 
