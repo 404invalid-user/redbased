@@ -19,11 +19,6 @@ function documentValidation(doc: Document | null = null, validationFeilds: Field
     msg: "doc is null"
   }
 
-  //has id
-  //TODO: docs will auto gen an id and return on ceration if one not specified
-  if (!doc.id && isFilter == false) {
-    throw new Error("Document must have an 'id' type string field.");
-  }
 
   //does not contain extra unknown keys
   if (doc !== null) {

@@ -56,8 +56,8 @@ export class RedBased {
 
   newSchema(schema: typeof SchemaConstructor) {
     if (this.schemas[schema.getName()] !== undefined) throw new Error("can not add schema " + schema.getName() + "as it exists");
+    this.schemas[schema.getName()] = new SchemaInstance(this.redisClient, schema.getName(), schema.getFields());
 
-    this.schemas[schema.getName()] = new SchemaInstance(this.redisClient, schema.getName(), schema.getFields())
   }
 
 
