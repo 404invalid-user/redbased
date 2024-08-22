@@ -13,7 +13,7 @@ export class SchemaInstance {
   private fields: Fields;
   private redisClient: Redis | null = null;
 
-  constructor(redisClient: Redis|null, name: string, fields: Fields) {
+  constructor(redisClient: Redis | null, name: string, fields: Fields) {
     if (redisClient === null) throw new Error("can not add schema " + name + " as there is no redis connection");
     this.redisClient = redisClient;
     this.name = name;
@@ -179,6 +179,25 @@ export class SchemaInstance {
       })
       findStream.on('error', (err) => rej(err));
     })
+  }
+
+  public async findAndDelete(filterObject: Document): Promise<number> {
+    if (filterObject === null || filterObject === undefined || Object.keys(filterObject).length <= 0) throw new Error("FilterObject must contain atleast one key");
+
+    const count = await this.size(filterObject);
+    if (count === 0) return 0;
+
+    const findStream = await this.find(filterObject, 300, false);
+    return new Promise((res, rej) => {
+      const processed = 0;
+      findStream.on('data', (results) => {
+        for (const result of results) {
+          result.delete()
+          if (processed >= count) return res(processed);
+        }
+      });
+      findStream.on('error', (err) => rej(err));
+    });
   }
 
   public async size(filterObject: Document | null): Promise<number> {
