@@ -139,17 +139,13 @@ export class SchemaInstance {
         //check len of arr and see if matches limit or total count
         if (foundDocumentsArr.length >= limit || foundDocumentsArr.length >= SchemaDocumentCount) {
           //NOTE - push an empy array before stream close incase there was no items
-          if (!readableStream.readableEnded && !readableStream.destroyed) {
             if (!streamEnded) {
               readableStream.push(foundDocumentsArr);
             }
-          } else {
-            console.error('Attempted to push data after the stream has ended or been destroyed.');
-          }
+          
           foundDocumentsArr = [];
         }
         processedDocuments++;
-        console.log(processedDocuments, SchemaDocumentCount)
         //push rest of docs if any and end stream when finished processing all documents
         if (processedDocuments >= SchemaDocumentCount) {
           if (!streamEnded) {
@@ -159,14 +155,11 @@ export class SchemaInstance {
 
             console.log(foundDocumentsArr)
           }
-          console.log('\n\n\n\npushing LAST docs for ' + this.name);
           console.log(foundDocumentsArr)
-          console.log("pushing null")
           readableStream.push(null);
           streamEnded = true;
           break;
         }
-        console.log(i, results.length)
       }
     }
     //redis stream
