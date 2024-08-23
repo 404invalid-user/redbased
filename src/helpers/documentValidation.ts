@@ -23,7 +23,7 @@ function documentValidation(doc: Document | null = null, validationFeilds: Field
   //does not contain extra unknown keys
   if (doc !== null) {
     for (const key of Object.keys(doc)) {
-      if (!(key in validationFeilds)) {
+      if (!(key in validationFeilds) && key !== 'id') {
         return {
           pass: false,
           msg: `Schema does not contain field '${key}'.`
@@ -53,7 +53,7 @@ function documentValidation(doc: Document | null = null, validationFeilds: Field
       if (required === false && typeOfSupplyData !== "Undefined") {
         return {
           pass: false,
-          msg: `Field '${field}' must be of type '${typeStr}' ${required === false ? "or 'undefined'": ''}.`
+          msg: `Field '${field}' must be of type '${typeStr}' ${required === false ? "or 'undefined'" : ''}.`
         }
       }
     }

@@ -5,6 +5,7 @@ import pluralize from './helpers/pluralize';
 import documentValidation from './helpers/documentValidation';
 import constructDocument from './helpers/constructDocument';
 import { Redis } from 'ioredis';
+import { Console } from 'console';
 
 
 
@@ -27,7 +28,7 @@ export class SchemaInstance {
   public async create(data: Document): Promise<Document> {
     if (this.redisClient === null) throw new Error("no redis connection detected please first await successfull connection");
     const documentData = await constructDocument(this.redisClient, this.name, data, this.fields);
-    const validateDoc = documentValidation(data, this.fields, false);
+    const validateDoc = documentValidation(documentData, this.fields, false);
     if (validateDoc.pass === false) {
       const err = new Error(`Failed to create ${this.name} ${validateDoc.msg}`);
       Error.captureStackTrace(err);
@@ -79,12 +80,13 @@ export class SchemaInstance {
     let foundDocumentsArr: DocumentInstance[] = [];
     let processedDocuments: number = 0;
 
-
+    console.log("creating stream for " + this.name)
     // Create a readable stream to emit the matching documents
     const readableStream = new Readable({
       objectMode: true,
       read() { }
     });
+    let streamEnded = false;
 
 
     /** check if a document fits the filter */
@@ -111,24 +113,17 @@ export class SchemaInstance {
     function constructDocInStream(id: string, value: string) {
       const valueJson = JSON.parse(value);
       if (valueJson.id != id) valueJson.id = id;
-      processedDocuments++;
       return valueJson;
     }
-    /** push and reset local array */
-    function pushAndResetArray() {
-      //NOTE - push an empy array before stream close incase there was no items
-      //if (foundDocumentsArr.length <= 0) return false;
-      readableStream.push(foundDocumentsArr);
-      foundDocumentsArr = [];
-      return true;
-    }
+
 
 
     /** handle the redis stream */
-    const handleRedisStreamData = (results: string[]) => {
+    const handleRedisStreamData = async (results: string[]) => {
       //return empyty arr and end stream if lenght 0
       if (results.length <= 0) {
         readableStream.push([]);
+        streamEnded = true;
         return readableStream.push(null);;
       }
 
@@ -141,19 +136,37 @@ export class SchemaInstance {
           if (raw == false) foundDocumentsArr.push(new DocumentInstance(this.redisClient, this.name, doc, this.fields));
         }
 
-        //check if we should emit the local array to stream
+        //check len of arr and see if matches limit or total count
         if (foundDocumentsArr.length >= limit || foundDocumentsArr.length >= SchemaDocumentCount) {
-          pushAndResetArray();
+          //NOTE - push an empy array before stream close incase there was no items
+          if (!readableStream.readableEnded && !readableStream.destroyed) {
+            if (!streamEnded) {
+              readableStream.push(foundDocumentsArr);
+            }
+          } else {
+            console.error('Attempted to push data after the stream has ended or been destroyed.');
+          }
+          foundDocumentsArr = [];
         }
-
-
-
-
+        processedDocuments++;
+        console.log(processedDocuments, SchemaDocumentCount)
         //push rest of docs if any and end stream when finished processing all documents
         if (processedDocuments >= SchemaDocumentCount) {
-          pushAndResetArray();
+          if (!streamEnded) {
+            if (foundDocumentsArr.length > 0) readableStream.push(foundDocumentsArr);
+          } else {
+            console.error('Attempted to push data after the stream has ended or been destroyed.');
+
+            console.log(foundDocumentsArr)
+          }
+          console.log('\n\n\n\npushing LAST docs for ' + this.name);
+          console.log(foundDocumentsArr)
+          console.log("pushing null")
           readableStream.push(null);
+          streamEnded = true;
+          break;
         }
+        console.log(i, results.length)
       }
     }
     //redis stream
