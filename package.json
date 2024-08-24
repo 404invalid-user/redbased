@@ -1,6 +1,6 @@
 {
   "name": "redbased",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "use reddis like a database with predefined schemas",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

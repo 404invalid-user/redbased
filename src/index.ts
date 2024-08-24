@@ -6,10 +6,14 @@ export const Schema = SchemaConstructor;
 function isValidPort(port: number): boolean {
   return Number.isInteger(port) && port > 0 && port <= 65535;
 }
+
+interface Schemas {
+  [key: string]: SchemaInstance; // string index signature
+}
 export class RedBased {
   redisClient: Redis | null = null;
   redisOptions: RedisOptions;
-  schemas: any = {};
+  schemas: Schemas = {};
 
   constructor(config: RedisOptions) {
     if (config === null || config === undefined) {
@@ -41,7 +45,7 @@ export class RedBased {
     this.redisOptions = config;
   }
 
-  connect(): Promise<boolean> {
+  connect(): Promise<boolean | Error> {
     this.redisClient = new Redis(this.redisOptions);
     return new Promise<boolean>((resolve, reject) => {
       this.redisClient!.on('connect', () => {
@@ -54,10 +58,10 @@ export class RedBased {
   }
 
 
-  newSchema(schema: typeof SchemaConstructor) {
+  newSchema(schema: SchemaConstructor): void {
     if (this.schemas[schema.getName()] !== undefined) throw new Error("can not add schema " + schema.getName() + "as it exists");
     this.schemas[schema.getName()] = new SchemaInstance(this.redisClient, schema.getName(), schema.getFields());
-
+    return;
   }
 
 

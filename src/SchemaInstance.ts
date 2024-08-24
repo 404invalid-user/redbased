@@ -1,11 +1,10 @@
-import { Readable } from 'stream';
-import { Fields, Document } from '../types/schema';
-import DocumentInstance from './DocumentInstance';
-import pluralize from './helpers/pluralize';
-import documentValidation from './helpers/documentValidation';
-import constructDocument from './helpers/constructDocument';
 import { Redis } from 'ioredis';
-import { Console } from 'console';
+import { Readable } from 'stream';
+import pluralize from './helpers/pluralize';
+import DocumentInstance from './DocumentInstance';
+import { Fields, Document } from '../types/schema';
+import constructDocument from './helpers/constructDocument';
+import documentValidation from './helpers/documentValidation';
 
 
 
@@ -69,44 +68,21 @@ export class SchemaInstance {
    * @returns {Stream}
    */
   public async find(filterObject: Document | null, limit: number = 200, raw: boolean = false): Promise<Readable> {
-    const validateDoc = documentValidation(filterObject, this.fields, true);
-    if (validateDoc.pass = false) throw new Error(`failed to find ${this.name} ${validateDoc.msg}`);
-
     if (this.redisClient === null) throw new Error("No Redis connection detected. Please await successful connection.");
 
+    const validateFilter = documentValidation(filterObject, this.fields, true);
+    if (validateFilter.pass = false) throw new Error(`failed to find ${this.name} ${validateFilter.msg}`);
 
-
-    const SchemaDocumentCount: number = await this.redisClient.hlen(pluralize(this.name));
-    let foundDocumentsArr: DocumentInstance[] = [];
-    let processedDocuments: number = 0;
-
-    console.log("creating stream for " + this.name)
     // Create a readable stream to emit the matching documents
     const readableStream = new Readable({
       objectMode: true,
       read() { }
     });
-    let streamEnded = false;
 
 
-    /** check if a document fits the filter */
-    function checkInFilter(doc: Document): boolean {
-      if (filterObject === null || filterObject === undefined || Object.keys(filterObject).length === 0) {
-        return true;
-      }
-
-      const filterKeys = Object.keys(filterObject);
-      for (const key of filterKeys) {
-        if (!(key in doc)) {
-          return false;
-        }
-        // Check if the values of the keys are equal
-        if (filterObject[key] !== doc[key]) {
-          return false;
-        }
-      }
-      return true;
-    }
+    const SchemaDocumentCount: number = await this.redisClient.hlen(pluralize(this.name));
+    const processedDocIds: string[] = [];
+    let processedDocCount: number = 0;
 
 
     /** construct the document json */
@@ -118,45 +94,61 @@ export class SchemaInstance {
 
 
 
+    /** check if a document fits the filter */
+    function checkInFilter(doc: Document): boolean {
+      if (filterObject === null || filterObject === undefined || Object.keys(filterObject).length === 0) {
+        return true;
+      }
+
+      const filterKeys = Object.keys(filterObject);
+      for (const key of filterKeys) {
+        if (!(key in doc)) return false;
+        // Check if the values of the keys are equal
+        if (filterObject[key] !== doc[key]) return false;
+      }
+      return true;
+    }
+
+    let documentsArr: DocumentInstance[] = [];
+    const handleRedisResult = async (id: string, data: string) => {
+      const doc = constructDocInStream(id, data);
+
+      //check if doc in filter and add to our temp aray
+      if (checkInFilter(doc) === true) {
+        if (raw == true) documentsArr.push(doc);
+        if (raw == false) documentsArr.push(new DocumentInstance(this.redisClient, this.name, doc, this.fields));
+      }
+
+      //check len of arr and see if matches limit or total count
+      if (documentsArr.length >= limit || documentsArr.length >= SchemaDocumentCount) {
+        readableStream.push(documentsArr);
+        documentsArr = [];
+      }
+
+
+      processedDocCount++;
+
+      //push rest of docs if any and end stream when finished processing all documents
+      if (processedDocCount === SchemaDocumentCount) {
+        if (documentsArr.length > 0) readableStream.push(documentsArr);
+        readableStream.push(null);
+        return;
+      }
+    }
+
     /** handle the redis stream */
     const handleRedisStreamData = async (results: string[]) => {
       //return empyty arr and end stream if lenght 0
       if (results.length <= 0) {
         readableStream.push([]);
-        streamEnded = true;
         return readableStream.push(null);;
       }
-
       for (let i = 0; i < results.length; i += 2) {
-        const doc = constructDocInStream(results[i], results[i + 1]);
+        //skip docs we have already read
+        if (processedDocIds.includes(results[i])) continue;
+        processedDocIds.push(results[i]);
 
-        //check if doc in filter and add to our temp aray
-        if (checkInFilter(doc) === true) {
-          if (raw == true) foundDocumentsArr.push(doc);
-          if (raw == false) foundDocumentsArr.push(new DocumentInstance(this.redisClient, this.name, doc, this.fields));
-        }
-
-        //check len of arr and see if matches limit or total count
-        if (foundDocumentsArr.length >= limit || foundDocumentsArr.length >= SchemaDocumentCount) {
-          //NOTE - push an empy array before stream close incase there was no items
-          if (!streamEnded) {
-            readableStream.push(foundDocumentsArr);
-          }
-          foundDocumentsArr = [];
-        }
-        processedDocuments++;
-        //push rest of docs if any and end stream when finished processing all documents
-        if (processedDocuments >= SchemaDocumentCount) {
-          if (!streamEnded) {
-            if (foundDocumentsArr.length > 0) readableStream.push(foundDocumentsArr);
-          } else {
-            console.error('Attempted to push data after the stream has ended or been destroyed.');
-            console.log(foundDocumentsArr)
-          }
-          readableStream.push(null);
-          streamEnded = true;
-          break;
-        }
+        handleRedisResult(results[i], results[i + 1]);
       }
     }
     //redis stream
@@ -212,6 +204,7 @@ export class SchemaInstance {
     }
     const sizeStream = await this.find(filterObject, 300, true);
     return new Promise((res, rej) => {
+
       sizeStream.on('data', docs => {
         size += docs.length;
       });
